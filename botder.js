@@ -1,4 +1,5 @@
 const tmi = require('tmi.js');
+const fetch = require("node-fetch");
 const pass = require('./password.js');
 
 
@@ -55,10 +56,10 @@ var useEmotes = [
 
 async function loadGlobalEmotes(){
     try {
-        useEmotes.concat((await (await fetch('https://api.twitchemotes.com/api/v4/channels/0')).json()).emotes.map(emote => emote = emote.code));
-        useEmotes.concat((await (await fetch('https://api.betterttv.net/3/cached/emotes/global')).json()).map(emote => emote = emote.code));
+        useEmotes = useEmotes.concat((await (await fetch('https://api.twitchemotes.com/api/v4/channels/0')).json()).emotes.map(emote => emote = emote.code));
+        useEmotes = useEmotes.concat((await (await fetch('https://api.betterttv.net/3/cached/emotes/global')).json()).map(emote => emote = emote.code));
         let ffzObject = (await (await fetch('https://api.frankerfacez.com/v1/set/global')).json());
-        useEmotes.concat(ffzObject['sets']['3']['emoticons'].concat(ffzObject['sets']['4330']['emoticons']).map(emote => emote = emote.name));
+        useEmotes = useEmotes.concat(ffzObject['sets']['3']['emoticons'].concat(ffzObject['sets']['4330']['emoticons']).map(emote => emote = emote.name));
     } catch (e){
         console.log(e);
     }
@@ -68,8 +69,8 @@ async function loadChannelEmotes(){
     for (let channel of opts.channels){
         try{
             let ffzObject = (await (await fetch('https://api.frankerfacez.com/v1/room/' + channel.substring(1))).json());
-            useEmotes.concat(ffzObject['sets'][ffzObject['room']['set']]['emoticons'].map(emote => emote = emote.name));
-            useEmotes.concat((await (await fetch('https://api.betterttv.net/2/channels/' + channel.substring(1))).json()).map(emote => emote = emote.code));
+            useEmotes = useEmotes.concat(ffzObject['sets'][ffzObject['room']['set']]['emoticons'].map(emote => emote = emote.name));
+            useEmotes = useEmotes.concat((await (await fetch('https://api.betterttv.net/2/channels/' + channel.substring(1))).json())['emotes'].map(emote => emote = emote.code));
         } catch (e){
             console.log(e);
         }
@@ -795,10 +796,8 @@ function textPrinter(channel, input, emote) {
 }
 
 function onConnectedHandler(addr, port) {
-    for (const channelName of opts.channels) {
-        loadGlobalEmotes();
-        loadChannelEmotes();
+    loadGlobalEmotes();
+    loadChannelEmotes();
         //client.action(channelName, "ppHop running... ppHop");
-    }
     console.log(`* Connected to ${addr}:${port}`);
 }
