@@ -16,16 +16,29 @@ const opts = {
 
 const client = new tmi.client(opts);
 
-
 client.on('message', onMessageHandler);
 client.on('connected', onConnectedHandler);
 
-
 client.connect();
-var lastCommandTime = 0;
 
-var longEmotes = ["LULWide", "KKoooona", "WideHardest1", "WideHardest2", "paaaajaCmon", "AndKnuckles", "YetiZ", "TaxiBro", "AngelThump", "FireSpeed", "FishMoley"]
-var smolEmotes = ["ppL", "miniJulia", "Kapp"];
+
+class Channel {
+    constructor(name) {
+        this.name = name;
+        this.useEmotes = [];
+        this.lastCommandTime = 0;
+        this.loadEmotes();
+    }
+
+    async loadEmotes() {
+        this.useEmotes = await loadChannelEmotes(this.name);
+    }
+}
+
+var channelObjs = {};
+
+const longEmotes = ["LULWide", "KKoooona", "WideHardest1", "WideHardest2", "paaaajaCmon", "AndKnuckles", "YetiZ", "TaxiBro", "AngelThump", "FireSpeed", "FishMoley"];
+const smolEmotes = ["ppL", "miniJulia", "Kapp"];
 
 
 var useEmotes = [
@@ -54,38 +67,40 @@ var useEmotes = [
 ];
 
 
-async function loadGlobalEmotes(){
+async function loadGlobalEmotes() {
     try {
         useEmotes = useEmotes.concat((await (await fetch('https://api.twitchemotes.com/api/v4/channels/0')).json()).emotes.map(emote => emote = emote.code));
         useEmotes = useEmotes.concat((await (await fetch('https://api.betterttv.net/3/cached/emotes/global')).json()).map(emote => emote = emote.code));
         let ffzObject = (await (await fetch('https://api.frankerfacez.com/v1/set/global')).json());
         useEmotes = useEmotes.concat(ffzObject['sets']['3']['emoticons'].concat(ffzObject['sets']['4330']['emoticons']).map(emote => emote = emote.name));
-    } catch (e){
+    } catch (e) {
         console.log(e);
     }
 }
 
-async function loadChannelEmotes(){
-    for (let channel of opts.channels){
-        try{
-            let ffzObject = (await (await fetch('https://api.frankerfacez.com/v1/room/' + channel.substring(1))).json());
-            useEmotes = useEmotes.concat(ffzObject['sets'][ffzObject['room']['set']]['emoticons'].map(emote => emote = emote.name));
-            useEmotes = useEmotes.concat((await (await fetch('https://api.betterttv.net/2/channels/' + channel.substring(1))).json())['emotes'].map(emote => emote = emote.code));
-        } catch (e){
-            console.log(e);
-        }
+async function loadChannelEmotes(channelName) {
+    let eList = [];
+    try {
+        let ffzObject = (await (await fetch('https://api.frankerfacez.com/v1/room/' + channelName.substring(1))).json());
+        eList = eList.concat(ffzObject['sets'][ffzObject['room']['set']]['emoticons'].map(emote => emote = emote.name));
+        eList = eList.concat((await (await fetch('https://api.betterttv.net/2/channels/' + channelName.substring(1))).json())['emotes'].map(emote => emote = emote.code));
+    } catch (e) {
+        console.log(e);
+    } finally {
+        return eList;
     }
 }
 
 
 
-var forbiddenEcho = ['$remind', '$notify', '!filters', '!set', '.help', '.w', '.disconnect', '.mod', '.vip', '.color', '.user', '.ban', '.unban', '.timeout', '.untimeout', '.slow', '.slowoff', '.r9kbeta', '.r9kbetaoff', '.emoteonly', '.emoteonlyoff', '.clear', '.subscribers', '.subscribersoff', '.followers', '.followersoff', '.part', '.unmod', '.unvip', '.block', '.unblock', '!cancelraffle', '!closestore', '!disablesfx', '!editcounter', '!enablesfx', '!kappagen', '!openstore', '!pause', '!permit', '!ping', '!play', '!removesong', '!skip', '!songqueue', '!srclear', '/ignore', '/unignore', '!cmd', '!command', '!slots', '!roulette', '/help', '/w', '/disconnect', '/mod', '/vip', '/color', '/user', '/ban', '/unban', '/timeout', '/untimeout', '/slow', '/slowoff', '/r9kbeta', '/r9kbetaoff', '/emoteonly', '/emoteonlyoff', '/clear', '/subscribers', '/subscribersoff', '/followers', '/followersoff', '/part', '/unmod', '/unvip', '/block', '/unblock', ];
+const forbiddenEcho = ['$remind', '$notify', '!filters', '!set', '.help', '.w', '.disconnect', '.mod', '.vip', '.color', '.user', '.ban', '.unban', '.timeout', '.untimeout', '.slow', '.slowoff', '.r9kbeta', '.r9kbetaoff', '.emoteonly', '.emoteonlyoff', '.clear', '.subscribers', '.subscribersoff', '.followers', '.followersoff', '.part', '.unmod', '.unvip', '.block', '.unblock', '!cancelraffle', '!closestore', '!disablesfx', '!editcounter', '!enablesfx', '!kappagen', '!openstore', '!pause', '!permit', '!ping', '!play', '!removesong', '!skip', '!songqueue', '!srclear', '/ignore', '/unignore', '!cmd', '!command', '!slots', '!roulette', '/help', '/w', '/disconnect', '/mod', '/vip', '/color', '/user', '/ban', '/unban', '/timeout', '/untimeout', '/slow', '/slowoff', '/r9kbeta', '/r9kbetaoff', '/emoteonly', '/emoteonlyoff', '/clear', '/subscribers', '/subscribersoff', '/followers', '/followersoff', '/part', '/unmod', '/unvip', '/block', '/unblock', ];
 
 
 function coolDownCheck(channel, seconds, callback, params) {
+    let channelObj = channelObjs[channel];
     let now = Math.round(new Date().getTime() / 1000);
-    if (now >= lastCommandTime + seconds) {
-        lastCommandTime = Math.round(new Date().getTime() / 1000);
+    if (now >= channelObj.lastCommandTime + seconds) {
+        channelObj.lastCommandTime = Math.round(new Date().getTime() / 1000);
         callback(...params);
     }
 }
@@ -142,7 +157,7 @@ function onMessageHandler(target, context, msg, self) {
                 }
                 ;
                 if (typeof logday === 'undefined') {
-                    logday = new Date().getDate()
+                    logday = new Date().getDate();
                 }
                 ;
                 if (typeof logmonth === 'undefined') {
@@ -372,130 +387,49 @@ function onMessageHandler(target, context, msg, self) {
         }
 
         case '>pyramid':
-            if (longEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too long NaM`);
-                }, []);
-                return;
-            }
-            if (smolEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too smol NaM`);
-                }, []);
-                return;
-            }
-            if (useEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, pyramider, [target, commandName[1]]);
-                return;
-            } else {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That is not an emote NaM`);
-                    return;
-                }, []);
-            }
+            coolDownCheck(target, 5, function(channel, emote){
+                if (emoteCheck(channel, emote) === 0){
+                    pyramider(channel, emote);
+                }
+            }, [target, commandName[1]]);
             break;
 
         case '>cube':
-            if (longEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too long NaM`);
-                }, []);
-                return;
-            }
-            if (smolEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too smol NaM`);
-                }, []);
-                return;
-            }
-            if (useEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, cube, [target, commandName[1]]);
-                return;
-            } else {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That is not an emote NaM`);
-                    return;
-                }, []);
-            }
+            coolDownCheck(target, 5, function(channel, emote){
+                if (emoteCheck(channel, emote) === 0){
+                    cube(channel, emote);
+                }
+            }, [target, commandName[1]]);
             break;
 
         case '>spread':
-            if (longEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too long NaM`);
-                }, []);
-                return;
-            }
-            if (smolEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too smol NaM`);
-                }, []);
-                return;
-            }
-            if (useEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, spreader, [target, commandName[1]]);
-                return;
-            } else {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That is not an emote NaM`);
-                    return;
-                }, []);
-            }
+            coolDownCheck(target, 5, function(channel, emote){
+                if (emoteCheck(channel, emote) === 0){
+                    spreader(channel, emote);
+                }
+            }, [target, commandName[1]]);
             break;
 
         case '>dna':
-            if (longEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too long NaM`);
-                }, []);
-                return;
-            }
-            if (smolEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too smol NaM`);
-                }, []);
-                return;
-            }
-            if (useEmotes.includes(commandName[1])) {
-                coolDownCheck(target, 5, DNA, [target, commandName[1]]);
-                return;
-            } else {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That is not an emote NaM`);
-                    return;
-                }, []);
-            }
+            coolDownCheck(target, 5, function(channel, emote){
+                if (emoteCheck(channel, emote) === 0){
+                    DNA(channel, emote);
+                }
+            }, [target, commandName[1]]);
             break;
 
         case '>eprint':
-            if (commandName[1].length > 5) {
-                coolDownCheck(target, 5, function () {
+            coolDownCheck(target, 5, function(channel, emote, word){
+                if (word.length > 5) {
                     client.say(target, `That word is too long NaM`);
-                }, []);
-                return;
-            }
-            if (longEmotes.includes(commandName[2])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too long NaM`);
-                }, []);
-                return;
-            }
-            if (smolEmotes.includes(commandName[2])) {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That emote is too smol NaM`);
-                }, []);
-                return;
-            }
-            if (useEmotes.includes(commandName[2])) {
-                coolDownCheck(target, 5, textPrinter, [target, commandName[1], commandName[2]]);
-                return;
-            } else {
-                coolDownCheck(target, 5, function () {
-                    client.say(target, `That is either a sub emote or not an emote NaM`);
                     return;
-                }, []);
-            }
+                }
+                if (emoteCheck(channel, emote) === 0){
+                    textPrinter(channel, word, emote);
+                }
+            }, [target, commandName[2], commandName[1]]);
             break;
+            
     }
     /*  if (msg === 'PogChamp a Multi-Raffle has begun for 10000 UgandaShilling PogChamp it will end in 30 Seconds. Enter by typing "!join" OpieOP' ) {
      if (context['display-name'] === 'StreamElements') {
@@ -570,6 +504,22 @@ function onMessageHandler(target, context, msg, self) {
             return;
         }
     }
+}
+
+function emoteCheck(channel, emote) {
+    if (longEmotes.includes(emote)) {
+        client.say(channel, `That emote is too long NaM`);
+        return -1;
+    }
+    if (smolEmotes.includes(emote)) {
+        client.say(channel, `That emote is too smol NaM`);
+        return -1;
+    }
+    if (!channelObjs[channel].useEmotes.includes(emote)) {
+        client.say(channel, `That is either a sub emote or not an emote NaM`);
+        return -1;
+    }
+    return 0;
 }
 
 
@@ -797,7 +747,9 @@ function textPrinter(channel, input, emote) {
 
 function onConnectedHandler(addr, port) {
     loadGlobalEmotes();
-    loadChannelEmotes();
-        //client.action(channelName, "ppHop running... ppHop");
+    for (const channel of opts.channels) {
+        channelObjs[channel] = new Channel(channel);
+    }
+    //client.action(channelName, "ppHop running... ppHop");
     console.log(`* Connected to ${addr}:${port}`);
 }
